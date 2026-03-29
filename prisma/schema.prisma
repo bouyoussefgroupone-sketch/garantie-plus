@@ -1,0 +1,278 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  super_admin
+  admin
+  sub_admin
+  reseller
+}
+
+enum UserStatus {
+  invited
+  active
+  suspended
+}
+
+enum OrganizationType {
+  platform
+  reseller
+}
+
+enum OrganizationStatus {
+  active
+  suspended
+}
+
+enum CurrencyCode {
+  EUR
+}
+
+enum WalletTransactionType {
+  credit
+  debit
+  adjustment
+  reversal
+  refund
+}
+
+enum WalletOperationReason {
+  top_up
+  warranty_purchase
+  manual_adjustment
+  order_reversal
+  refund
+  bonus
+}
+
+enum WalletTransactionStatus {
+  pending
+  posted
+  canceled
+  failed
+}
+
+enum WarrantyStatus {
+  draft
+  active
+  expired
+  canceled
+  voided
+}
+
+enum DeviceCondition {
+  new
+  refurbished
+}
+
+enum CertificateStatus {
+  active
+  voided
+}
+
+enum CertificateEventType {
+  generated
+  regenerated
+  voided
+}
+
+model Organization {
+  id         String             @id @default(cuid())
+  code       String             @unique
+  name       String
+  legalName  String?
+  email      String?
+  phone      String?
+  type       OrganizationType
+  status     OrganizationStatus @default(active)
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  users      User[]
+  customers  Customer[]
+  warranties Warranty[]
+  wallet     Wallet?
+
+  @@index([type, status])
+}
+
+model User {
+  id                  String              @id @default(cuid())
+  organizationId      String?
+  organization        Organization?       @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  role                UserRole
+  status              UserStatus          @default(invited)
+  email               String              @unique
+  passwordHash        String?
+  firstName           String
+  lastName            String
+  lastLoginAt         DateTime?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  sessions            Session[]
+  createdTransactions WalletTransaction[] @relation("WalletTransactionActor")
+  soldWarranties      Warranty[]          @relation("WarrantySeller")
+  certificateEvents   CertificateEvent[]  @relation("CertificateEventActor")
+
+  @@index([organizationId, role])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, expiresAt])
+}
+
+model CoveragePlan {
+  id                  String       @id @default(cuid())
+  code                String       @unique
+  name                String
+  description         String?
+  category            String       @default("TV")
+  durationMonths      Int
+  waitingPeriodDays   Int          @default(0)
+  currency            CurrencyCode @default(EUR)
+  retailPriceCents    Int
+  resellerCostCents   Int
+  minDevicePriceCents Int?
+  maxDevicePriceCents Int?
+  active              Boolean      @default(true)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  warranties          Warranty[]
+
+  @@index([category, active])
+}
+
+model Wallet {
+  id             String              @id @default(cuid())
+  organizationId String              @unique
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  currency       CurrencyCode        @default(EUR)
+  balanceCents   Int                 @default(0)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  transactions   WalletTransaction[]
+}
+
+model WalletTransaction {
+  id                 String                  @id @default(cuid())
+  walletId           String
+  wallet             Wallet                  @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  createdByUserId    String?
+  createdByUser      User?                   @relation("WalletTransactionActor", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  type               WalletTransactionType
+  reason             WalletOperationReason
+  status             WalletTransactionStatus @default(posted)
+  amountCents        Int
+  balanceBeforeCents Int
+  balanceAfterCents  Int
+  currency           CurrencyCode            @default(EUR)
+  referenceType      String?
+  referenceId        String?
+  idempotencyKey     String                  @unique
+  metadata           Json?
+  effectiveAt        DateTime                @default(now())
+  createdAt          DateTime                @default(now())
+  warranty           Warranty?
+
+  @@index([walletId, createdAt])
+  @@index([referenceType, referenceId])
+}
+
+model Customer {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  externalRef    String?
+  firstName      String
+  lastName       String
+  email          String?
+  phone          String?
+  addressLine1   String?
+  addressLine2   String?
+  postalCode     String?
+  city           String?
+  country        String?      @default("FR")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  warranties     Warranty[]
+
+  @@unique([organizationId, externalRef])
+  @@index([organizationId, lastName, firstName])
+}
+
+model Warranty {
+  id                 String              @id @default(cuid())
+  organizationId     String
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  coveragePlanId     String
+  coveragePlan       CoveragePlan        @relation(fields: [coveragePlanId], references: [id], onDelete: Restrict)
+  customerId         String
+  customer           Customer            @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  soldByUserId       String
+  soldByUser         User                @relation("WarrantySeller", fields: [soldByUserId], references: [id], onDelete: Restrict)
+  walletTransactionId String             @unique
+  walletTransaction  WalletTransaction   @relation(fields: [walletTransactionId], references: [id], onDelete: Restrict)
+  policyNumber       String              @unique
+  externalOrderRef   String?
+  deviceBrand        String
+  deviceModel        String
+  deviceSerialNumber String
+  deviceCondition    DeviceCondition     @default(new)
+  purchaseDate       DateTime
+  devicePriceCents   Int
+  salePriceCents     Int
+  currency           CurrencyCode        @default(EUR)
+  coverageStartDate  DateTime
+  coverageEndDate    DateTime
+  status             WarrantyStatus      @default(active)
+  notes              String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  certificate        WarrantyCertificate?
+
+  @@index([organizationId, status, createdAt])
+  @@index([customerId, createdAt])
+}
+
+model WarrantyCertificate {
+  id                String            @id @default(cuid())
+  warrantyId        String            @unique
+  warranty          Warranty          @relation(fields: [warrantyId], references: [id], onDelete: Cascade)
+  certificateNumber String            @unique
+  version           Int               @default(1)
+  status            CertificateStatus @default(active)
+  pdfPath           String
+  pdfChecksum       String?
+  generatedAt       DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  events            CertificateEvent[]
+}
+
+model CertificateEvent {
+  id            String              @id @default(cuid())
+  certificateId String
+  certificate   WarrantyCertificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+  actorUserId   String?
+  actorUser     User?               @relation("CertificateEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  type          CertificateEventType
+  storagePath   String
+  checksum      String?
+  createdAt     DateTime            @default(now())
+
+  @@index([certificateId, createdAt])
+}
