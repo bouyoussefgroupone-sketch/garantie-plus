@@ -21,7 +21,8 @@ Socle SaaS pour la vente et la gestion de garanties TV.
 
 ## Variables d'environnement Vercel
 
-- `DATABASE_URL`: URL PostgreSQL de production
+- `DATABASE_URL`: URL PostgreSQL poolée utilisée par l'application
+- `DIRECT_URL`: URL PostgreSQL non poolée utilisée par Prisma pour les migrations
 - `AUTH_SECRET`: secret long et aléatoire pour les sessions
 - `APP_URL`: URL publique de l'application, par exemple `https://garantie-plus.vercel.app`
 
