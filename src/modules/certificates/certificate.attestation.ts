@@ -1,4 +1,29 @@
-<!DOCTYPE html>
+import type { CertificateAttestationPayload } from "@/modules/certificates/attestation.types";
+import {
+  buildCertificateQrValue,
+  generateCertificateQrDataUrl
+} from "@/modules/certificates/certificate.qr";
+
+function formatDate(date: string) {
+  return new Intl.DateTimeFormat("fr-FR").format(new Date(date));
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+export async function renderCertificateAttestationHtml(
+  payload: CertificateAttestationPayload
+) {
+  const qrCodeDataUrl = await generateCertificateQrDataUrl(payload);
+  const qrCodeValue = buildCertificateQrValue(payload);
+
+  return `<!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
@@ -13,9 +38,9 @@
     .header {
       display: flex;
       justify-content: space-between;
-      gap: 24px;
       border-bottom: 2px solid #0f172a;
       padding-bottom: 10px;
+      gap: 24px;
     }
 
     .title {
@@ -68,8 +93,8 @@
 
     .qr-box {
       display: flex;
-      align-items: center;
       gap: 16px;
+      align-items: center;
     }
 
     .qr-box img {
@@ -77,9 +102,9 @@
       height: 130px;
       object-fit: contain;
       background: white;
-      border: 1px solid #cbd5e1;
-      border-radius: 10px;
       padding: 6px;
+      border-radius: 10px;
+      border: 1px solid #cbd5e1;
     }
 
     .qr-meta {
@@ -101,8 +126,8 @@
     </div>
 
     <div style="text-align:right">
-      <div><strong>N° Attestation :</strong> GP-2026-000001</div>
-      <div><strong>Date :</strong> 29/03/2026</div>
+      <div><strong>N° Attestation :</strong> ${escapeHtml(payload.certificate_number)}</div>
+      <div><strong>Date :</strong> ${escapeHtml(formatDate(payload.subscription_date))}</div>
     </div>
   </div>
 
@@ -110,7 +135,7 @@
     <h2>ATTESTATION D'EXTENSION DE GARANTIE</h2>
     <p>
       Cette attestation certifie que le produit ci-dessous beneficie d'une extension
-      de garantie commerciale de 12 mois apres la garantie constructeur.
+      de garantie commerciale de ${payload.warranty.extended_duration_months} mois apres la garantie constructeur.
     </p>
   </div>
 
@@ -118,16 +143,16 @@
     <div>
       <div class="section-title">Client</div>
       <div class="box">
-        Nom : Nom Prenom<br />
-        Telephone : 0600000000
+        Nom : ${escapeHtml(payload.client.full_name)}<br />
+        Telephone : ${escapeHtml(payload.client.phone)}
       </div>
     </div>
 
     <div>
       <div class="section-title">Revendeur</div>
       <div class="box">
-        Nom : Nom du revendeur<br />
-        Code : RSL-001
+        Nom : ${escapeHtml(payload.reseller.name)}<br />
+        Code : ${escapeHtml(payload.reseller.code)}
       </div>
     </div>
   </div>
@@ -135,33 +160,33 @@
   <div class="section">
     <div class="section-title">Produit couvert</div>
     <div class="box">
-      Type : TV<br />
-      Marque : Samsung<br />
-      Modele : UE55...<br />
-      Numero de serie : SN123456789
+      Type : ${escapeHtml(payload.product.type)}<br />
+      Marque : ${escapeHtml(payload.product.brand)}<br />
+      Modele : ${escapeHtml(payload.product.model)}<br />
+      Numero de serie : ${escapeHtml(payload.product.serial_number)}
     </div>
   </div>
 
   <div class="section">
     <div class="section-title">Periode de garantie</div>
     <div class="box">
-      Garantie constructeur : 12 mois<br />
-      Fin garantie constructeur : 29/03/2027<br /><br />
+      Garantie constructeur : ${payload.warranty.manufacturer_duration_months} mois<br />
+      Fin garantie constructeur : ${escapeHtml(formatDate(payload.warranty.manufacturer_end_date))}<br /><br />
 
-      Extension Garantie+ : 12 mois<br />
-      Debut : 29/03/2027<br />
-      Fin : 29/03/2028
+      Extension Garantie+ : ${payload.warranty.extended_duration_months} mois<br />
+      Debut : ${escapeHtml(formatDate(payload.warranty.extended_start_date))}<br />
+      Fin : ${escapeHtml(formatDate(payload.warranty.extended_end_date))}
     </div>
   </div>
 
   <div class="section">
     <div class="section-title">Verification QR</div>
     <div class="box qr-box">
-      <img src="{{qr_code_data_url}}" alt="QR code de verification du certificat" />
+      <img src="${qrCodeDataUrl}" alt="QR code de verification du certificat" />
       <div class="qr-meta">
-        Scanner ce QR code pour verifier l'attestation.<br /><br />
+        Scannez ce QR code pour verifier l'attestation et retrouver les donnees de reference du certificat.<br /><br />
         <strong>Contenu QR :</strong><br />
-        {{qr_code_value}}
+        ${escapeHtml(qrCodeValue)}
       </div>
     </div>
   </div>
@@ -205,4 +230,5 @@
     Pour toute demande SAV, veuillez contacter : support@societe.ma
   </div>
 </body>
-</html>
+</html>`;
+}

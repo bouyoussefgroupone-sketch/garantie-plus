@@ -19,6 +19,12 @@ Socle SaaS pour la vente et la gestion de garanties TV.
 4. Lancer les migrations avec `npm run prisma:migrate`
 5. Démarrer l'app avec `npm run dev`
 
+## Variables d'environnement Vercel
+
+- `DATABASE_URL`: URL PostgreSQL de production
+- `AUTH_SECRET`: secret long et aléatoire pour les sessions
+- `APP_URL`: URL publique de l'application, par exemple `https://garantie-plus.vercel.app`
+
 ## Rôles
 
 - `super_admin`
